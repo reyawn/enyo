@@ -218,6 +218,7 @@ enyo.kind({
 		}
 		inProps.kind = inProps.kind || inProps.isa || this.defaultKind;
 		inProps.owner = inProps.owner || this;
+		inProps._owner = inProps._owner || this._owner || inProps.owner;
 	},
 	_createComponent: function(inInfo, inMoreInfo) {
 		if (!inInfo.kind && ("kind" in inInfo)) {
@@ -356,12 +357,26 @@ enyo.kind({
 		if (this._silenced) {
 			return;
 		}
+
 		// if the event has a delegate associated with it we grab that
 		// for reference
 		var delegate = (event || (event = {})).delegate;
 		var ret;
 		// bottleneck event decoration
 		this.decorateEvent(name, event, sender);
+
+		// Experimental
+		var orig = event.originator;
+		var handler = orig ? orig[name] : null;
+		if (handler && this === orig) {
+			var _owner = this._owner;
+			if (handler && "function" === typeof _owner[handler] &&
+				_owner.dispatch(handler, event, sender)) {
+				this.log(handler);
+				return true;
+			}
+		}
+
 		// dispatch via the handlers block if possible
 		if (this.handlers && this.handlers[name] &&
 			this.dispatch(this.handlers[name], event, sender)) {
@@ -383,6 +398,16 @@ enyo.kind({
 				return ret;
 			}
 		}
+
+		// Experiment: dispatch to "logical" (old-style) owner
+		/*var orig = event.originator;
+		var handler = orig ? orig[name] : null;
+		if (handler && this === orig._owner && "function" === typeof this[handler] &&
+			this.dispatch(handler, event, sender)) {
+			this.log(handler);
+			return true;
+		}*/
+
 	},
 	// internal - try dispatching event to self, if that fails bubble it up the tree
 	dispatchBubble: function(inEventName, inEvent, inSender) {
@@ -444,8 +469,18 @@ enyo.kind({
 		if (fn && "function" === typeof fn) {
 			// TODO: we use inSender || this but the inSender argument
 			// to keep unit tests working will be deprecated in the future
+			if ("trackNumberTap" === inMethodName ) this.log(inMethodName);
 			return fn.call(this, inSender || this, inEvent);
 		}
+
+		// Experimental
+		/*if (inMethodName && this === inEvent.originator) {
+			fn = this._owner[inMethodName];
+			if (fn && "function" === typeof fn) {
+				this.log();
+				return fn.call(this._owner, inSender || this, inEvent);
+			}
+		}*/
 	},
 	/**
 		Sends a message to myself and all of my components.
